@@ -1,10 +1,13 @@
+import streamlit as st
 from ultralytics import YOLO
-from ultralytics import YOLOv10
-
 import cv2
 import time
 import numpy as np
 import torch
+from PIL import Image
+import tempfile
+import warnings
+warnings.filterwarnings('ignore')
 
 def get_direction(old_center, new_center, min_movement=10):
     if old_center is None or new_center is None:
@@ -69,115 +72,128 @@ class ObjectTracker:
         self.tracked_objects = current_objects
         return results
 
+
+    
 def main():
-    # Use YOLOv8x with optimizations
-    # model = YOLO('yolov8x.pt')
-
-    model = YOLOv10.from_pretrained("Ultralytics/YOLOv8")
-
+    st.title("Real-time Object Detection with Direction")
     
-    # Enable GPU if available and set half precision
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
+    # File uploader for video
+    uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'avi', 'mov'])
     
-    if device.type != 'cpu':
-        torch.backends.cudnn.benchmark = True
+    # Add start button
+    start_detection = st.button("Start Detection")
     
-    tracker = ObjectTracker()
-    video_path = "test2.mp4"
-    cap = cv2.VideoCapture(video_path)
+    # Add stop button
+    stop_detection = st.button("Stop Detection")
     
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    
-    cv2.namedWindow("YOLOv8x Detection with Direction", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("YOLOv8x Detection with Direction", 1280, 720)
-    
-    direction_colors = {
-        "left": (255, 0, 0),
-        "right": (0, 255, 0),
-        "up": (0, 255, 255),
-        "down": (0, 0, 255),
-        "stationary": (128, 128, 128)
-    }
-    
-    # FPS calculation
-    fps_start_time = time.time()
-    fps_counter = 0
-    fps_display = 0
-    
-    # Process every 2nd frame for better performance
-    frame_skip = 2
-    frame_count = 0
-    
-    print(f"Running on device: {device}")
-    
-    while cap.isOpened():
-        success, frame = cap.read()
-        if not success:
-            break
-        
-        frame_count += 1
-        if frame_count % frame_skip != 0:
-            continue
-        
-        # Update FPS
-        fps_counter += 1
-        if time.time() - fps_start_time > 1:
-            fps_display = fps_counter * frame_skip  # Adjust for skipped frames
-            fps_counter = 0
-            fps_start_time = time.time()
-        
-        # Optimize inference
-        results = model(frame, 
-                       conf=0.25,
-                       iou=0.45,
-                       max_det=20,
-                       verbose=False)[0]
-        
-        detections = []
-        for box in results.boxes.data:
-            x1, y1, x2, y2, conf, cls = box.tolist()
-            detections.append([int(x1), int(y1), int(x2), int(y2), float(conf), int(cls)])
-        
-        tracked_objects = tracker.update(detections)
-        
-        # Draw FPS
-        cv2.putText(frame, f"FPS: {fps_display}", 
-                   (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 
-                   1, (0, 255, 0), 2)
-        
-        # Draw total detections
-        cv2.putText(frame, f"Detections: {len(tracked_objects)}", 
-                   (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 
-                   1, (0, 255, 0), 2)
-        
-        for detection, obj_id, direction in tracked_objects:
-            x1, y1, x2, y2, conf, cls = detection
-            color = direction_colors.get(direction, (128, 128, 128))
+    if uploaded_file is not None and start_detection:
+        # Create a session state to track if detection is running
+        if 'running' not in st.session_state:
+            st.session_state.running = True
             
-            cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-            
-            label = f"{model.names[int(cls)]} {direction} {conf:.2f}"
-            text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
-            
-            cv2.rectangle(frame, 
-                         (int(x1), int(y1) - text_size[1] - 10), 
-                         (int(x1) + text_size[0], int(y1)), 
-                         color, -1)
-            
-            cv2.putText(frame, label, 
-                       (int(x1), int(y1) - 5), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        # Save uploaded file temporarily
+        tfile = tempfile.NamedTemporaryFile(delete=False)
+        tfile.write(uploaded_file.read())
         
-        cv2.imshow("YOLOv8x Detection with Direction", frame)
+        # Load model
+        with st.spinner('Loading model...'):
+            model = YOLO('yolov8x.pt',verbose=False)
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            model.to(device)
         
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-    
-    cap.release()
-    cv2.destroyAllWindows()
+        tracker = ObjectTracker()
+        cap = cv2.VideoCapture(tfile.name)
+        
+        direction_colors = {
+            "left": (255, 0, 0),
+            "right": (0, 255, 0),
+            "up": (0, 255, 255),
+            "down": (0, 0, 255),
+            "stationary": (128, 128, 128)
+        }
+        
+        # Create placeholder for video frame
+        frame_placeholder = st.empty()
+        # Create placeholder for detection info
+        info_placeholder = st.empty()
+        
+        st.success("Detection Started!")
+        
+        while cap.isOpened() and st.session_state.running:
+            success, frame = cap.read()
+            if not success:
+                break
+            
+            # Run detection
+            results = model(frame, 
+                          conf=0.25,
+                          iou=0.45,
+                          max_det=20,
+                          verbose=False)[0]
+            
+            detections = []
+            for box in results.boxes.data:
+                x1, y1, x2, y2, conf, cls = box.tolist()
+                detections.append([int(x1), int(y1), int(x2), int(y2), float(conf), int(cls)])
+            
+            tracked_objects = tracker.update(detections)
+            
+            # Dictionary to store detection counts
+            detection_counts = {}
+            
+            for detection, obj_id, direction in tracked_objects:
+                x1, y1, x2, y2, conf, cls = detection
+                color = direction_colors.get(direction, (128, 128, 128))
+                
+                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                
+                label = f"{model.names[int(cls)]} {direction} {conf:.2f}"
+                # Increased font size and thickness
+                font_scale = 1.2
+                thickness = 3
+                text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
+                
+                # Increased padding for label background
+                padding_y = 15
+                cv2.rectangle(frame, 
+                             (int(x1), int(y1) - text_size[1] - padding_y), 
+                             (int(x1) + text_size[0], int(y1)), 
+                             color, -1)
+                
+                cv2.putText(frame, label, 
+                           (int(x1), int(y1) - 5), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 
+                           font_scale, 
+                           (255, 255, 255), 
+                           thickness)
+                
+                # Count detections by class
+                class_name = model.names[int(cls)]
+                detection_counts[class_name] = detection_counts.get(class_name, 0) + 1
+            
+            # Convert BGR to RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Update frame
+            frame_placeholder.image(frame_rgb, channels="RGB", use_column_width=True)
+            
+            # Update detection info
+            info_text = "Detected Objects:\n"
+            for class_name, count in detection_counts.items():
+                info_text += f"{class_name}: {count}\n"
+            info_placeholder.text(info_text)
+            
+            # Check if stop button is pressed
+            if stop_detection:
+                st.session_state.running = False
+                break
+            
+        cap.release()
+        st.session_state.running = False
+        st.warning("Detection Stopped")
+        
+    elif uploaded_file is None and start_detection:
+        st.error("Please upload a video file first!")
 
 if __name__ == "__main__":
     main()
