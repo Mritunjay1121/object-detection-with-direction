@@ -25,7 +25,7 @@ This repository uses Github Actions to directly push it to Huggingface Space. Be
 
 ### The Webapp is Deployed using Huggingface Spaces.
 
-**[Acces It Here](https://datasciencesage-object-detection-with-direction.hf.space)**
+**[DEPLOYED-HERE](https://datasciencesage-object-detection-with-direction.hf.space)**
 
 
 ### Landing Page
