@@ -20,7 +20,7 @@ This is a **Object detection APP** which takes in a video and gets the objects d
 
 This repository uses Github Actions to directly push it to Huggingface Space. Before using it you must configure your repo using Huggingface Work yaml. Model used is Yolov8x.
 
-### Get all the files along with the model **[HERE] (https://huggingface.co/spaces/datasciencesage/object-detection-with-direction/tree/main)**
+### Get all the files along with the model **[HERE](https://huggingface.co/spaces/datasciencesage/object-detection-with-direction/tree/main)**
 
 
 ### The Webapp is Deployed using Huggingface Spaces.
