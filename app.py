@@ -77,25 +77,19 @@ class ObjectTracker:
 def main():
     st.title("Real-time Object Detection with Direction")
     
-    # File uploader for video
     uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'avi', 'mov'])
     
-    # Add start button
     start_detection = st.button("Start Detection")
     
-    # Add stop button
     stop_detection = st.button("Stop Detection")
     
     if uploaded_file is not None and start_detection:
-        # Create a session state to track if detection is running
         if 'running' not in st.session_state:
             st.session_state.running = True
             
-        # Save uploaded file temporarily
         tfile = tempfile.NamedTemporaryFile(delete=False)
         tfile.write(uploaded_file.read())
         
-        # Load model
         with st.spinner('Loading model...'):
             model = YOLO('yolov8x.pt',verbose=False)
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -112,9 +106,7 @@ def main():
             "stationary": (128, 128, 128)
         }
         
-        # Create placeholder for video frame
         frame_placeholder = st.empty()
-        # Create placeholder for detection info
         info_placeholder = st.empty()
         
         st.success("Detection Started!")
@@ -124,7 +116,6 @@ def main():
             if not success:
                 break
             
-            # Run detection
             results = model(frame, 
                           conf=0.25,
                           iou=0.45,
@@ -138,7 +129,6 @@ def main():
             
             tracked_objects = tracker.update(detections)
             
-            # Dictionary to store detection counts
             detection_counts = {}
             
             for detection, obj_id, direction in tracked_objects:
@@ -148,12 +138,10 @@ def main():
                 cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                 
                 label = f"{model.names[int(cls)]} {direction} {conf:.2f}"
-                # Increased font size and thickness
                 font_scale = 1.2
                 thickness = 3
                 text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
                 
-                # Increased padding for label background
                 padding_y = 15
                 cv2.rectangle(frame, 
                              (int(x1), int(y1) - text_size[1] - padding_y), 
@@ -167,11 +155,9 @@ def main():
                            (255, 255, 255), 
                            thickness)
                 
-                # Count detections by class
                 class_name = model.names[int(cls)]
                 detection_counts[class_name] = detection_counts.get(class_name, 0) + 1
             
-            # Convert BGR to RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Update frame
