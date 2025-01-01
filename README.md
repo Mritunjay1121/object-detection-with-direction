@@ -15,7 +15,7 @@ short_description: objectdetectionvideo
 
 # OBJECT DETECTION WITH DIRECTION
 
-This is a **Object detection APP** which takes in a video and gets the objects detected inside the video with their respective threshold scores.Along with the threshold scores it also gives us the direction the respective object is moving.
+This is a **Object detection WebApp** which takes in a video and gets the objects detected inside the video with their respective threshold scores.Along with the threshold scores it also gives us the direction the respective object is moving.
 
 
 This repository uses Github Actions to directly push it to Huggingface Space. Before using it you must configure your repo using Huggingface Workflow yaml. Model used is Yolov8x.
